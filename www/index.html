@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<!--HTML5 doctype-->
+<html>
+
+<head>
+<script src="http://debug-software.intel.com/target/target-script-min.js#NaqJdHGZWwAMFfesyzUmbxyLkZsYBkpqgZhurqhxgPA"></script>
+    <title>Tab View Template</title>
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=0, minimal-ui">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <META HTTP-EQUIV="Pragma" CONTENT="no-cache">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+    <link rel="stylesheet" type="text/css" href="lib/appframework/icons.css" />
+    <link rel="stylesheet" type="text/css" href="lib/appframework/af.ui.css" />
+
+    <script type="text/javascript" charset="utf-8" src="lib/jquery.min.js"></script>
+    <script type="text/javascript" charset="utf-8" src="lib/fastclick.min.js"></script>
+    <script type="text/javascript" charset="utf-8" src="lib/appframework/appframework.ui.min.js"></script>
+    <script src="cordova.js"></script>
+
+<script type="text/javascript" charset="utf-8">
+function onLoad() {
+    m = {
+        ax: 0, ay: 0, az: 0, ts: 0,
+        oLR:0, oFB:0, oDir: 0,
+        gLat:0, gLon: 0, gAlt: 0, gSpeed: 0,
+        doMeasure: false,
+        n: 0
+    };
+    document.addEventListener("deviceready", onDeviceReady, false);
+}
+
+
+function onDeviceReady() {
+    //navigator.geolocation.getCurrentPosition(onSuccess, onError);
+    //document.addEventListener("deviceorientation", deviceOrientation, false);
+    intel.xdk.device.setRotateOrientation('portrait');
+    db = window.openDatabase('jump', '0.1', 'Jump data', 10*1024*1024);
+    db.transaction(initDb, errorCB, successCB);
+    //window.requestFileSystem(LocalFileSystem.TEMPORARY, 0, gotFS, onError);
+    window.addEventListener('deviceorientation', function(eventData) {
+        m.oLR  = eventData.gamma.toFixed(2);
+        m.oFB  = eventData.beta.toFixed(2);
+        m.oDir = eventData.alpha.toFixed(2);
+        printData();
+    }, false);
+}
+
+
+function initDb(tx) {
+    tx.executeSql('DROP TABLE IF EXISTS jump');
+    tx.executeSql('CREATE TABLE IF NOT EXISTS jump (id integer primary key, ax float, ay float, az float, oLR float, oFB float, oDir float, gLat float, gLon float, gAlt float, timestamp)');
+    //tx.executeSql('INSERT INTO jump (id, ax, ay, az, oLR, oFB, oDir, gLat, gLon, gAlt, timestamp) VALUES (null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, )', [m.ax, m.ay, m.az, m.oLR, m.oFB, m.oDir, m.gLat, m.gLon, m.gDir, m.ts]);
+}
+
+
+function insertRecord(tx){
+    if (m.n<10000) {
+        tx.executeSql('INSERT INTO jump (id, ax, ay, az, oLR, oFB, oDir, gLat, gLon, gAlt, timestamp) VALUES (null, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )', [m.ax, m.ay, m.az, m.oLR, m.oFB, m.oDir, m.gLat, m.gLon, m.gAlt, m.ts], successCB, errorCB);
+    m.n++;
+    }
+}
+
+function selectRecords(tx){
+    tx.executeSql('SELECT * FROM jump', [], successResults,errorCB);
+}
+
+function successResults(tx,results){
+    var sb = [];
+    var nLength = results.rows.length;
+	alert(nLength);
+    for(var i=0;i<nLength;i++){
+		//console.log('Row: '+i);
+		//console.log('ax: '+results.rows.item(i).ax);
+        sb[i] = results.rows.item(i).ax + ';' +  results.rows.item(i).ay + ';' + results.rows.item(i).az + ';' +
+                results.rows.item(i).oLR + ';' +  results.rows.item(i).oFB + ';' + results.rows.item(i).oDir + ';' +
+                results.rows.item(i).gLat + ';' +  results.rows.item(i).gLon + ';' + results.rows.item(i).gAlt + ';' + results.rows.item(i).timestamp;
+    }
+    bodyText = sb.join("\n")
+}
+
+
+function errorCB(err) {
+        alert("Error processing SQL: "+err);
+}
+
+function successCB() {
+        //alert("SQL success!");
+}
+
+
+function printData() {
+    if ( m.doMeasure ) {
+        document.getElementById("ax").innerHTML = m.ax;
+        document.getElementById("ay").innerHTML = m.ay;
+        document.getElementById("az").innerHTML = m.az;
+        document.getElementById("oLR").innerHTML = m.oLR;
+        document.getElementById("oFB").innerHTML = m.oFB;
+        document.getElementById("oDir").innerHTML = m.oDir;
+        document.getElementById("gLat").innerHTML = m.gLat;
+        document.getElementById("gLon").innerHTML = m.gLon;
+        document.getElementById("gAlt").innerHTML = m.gAlt;
+    }
+}
+
+
+function deviceGPS( gps ) {
+    m.gLat = gps.coords.latitude.toFixed(6);
+    m.gLon = gps.coords.longitude.toFixed(6);
+    m.gAlt = gps.coords.altitude.toFixed(1);
+}
+
+
+function deviceAcceleration( acc ) {
+    m.ax = acc.x.toFixed(2);
+    m.ay = acc.y.toFixed(2);
+    m.az = acc.z.toFixed(2);
+    m.ts = acc.timestamp;
+    db.transaction(insertRecord, errorCB, successCB);
+}
+
+
+function startstop() {
+    m.doMeasure = !m.doMeasure;
+    if ( m.doMeasure == true ) {
+        document.getElementById("oLR").innerHTML = "Starting...";
+        watchIDacc = navigator.accelerometer.watchAcceleration(deviceAcceleration, onError, { frequency: 100 });
+        watchIDgps = navigator.geolocation.watchPosition(deviceGPS, onError, { maximumAge: 100, timeout: 5000, enableHighAccuracy: true });
+        //db.transaction(insertRecord, errorCB, successCB);
+        document.getElementById("ax").innerHTML = "Starting...";
+    } else {
+        document.getElementById("oLR").innerHTML = "Stopping...";
+        if (watchIDacc) { navigator.accelerometer.clearWatch(watchIDacc); watchIDacc = null; }
+        if (watchIDgps) { navigator.geolocation.clearWatch(watchIDgps); watchIDgps = null; }
+        //db.transaction(selectRecords, errorCB, successCB);
+        document.getElementById("ax").innerHTML = "Stopping...";
+    }
+}
+
+
+function start10min() {
+    if ( m.doMeasure == false ) setTimeout( startstop, 10*60*1000);
+}
+
+function emailDatabase() {
+    console.log('--> 1: '+ (intel.xdk===undefined).toString() );
+    console.log('--> 2: '+ (intel.xdk.device===undefined).toString() );
+    console.log('--> 3: '+ (intel.xdk.device.sendEmail===undefined).toString() );
+    //saveFileContent();
+    db.transaction(selectRecords, errorCB, successCB);
+    intel.xdk.device.sendEmail(bodyText, "some@one.com", "Jump data", true, "", "" );
+    /*console.log("mail://"+fileObj.fullPath);
+    cordova.plugins.email.open({
+        to:      ['tobbe_ee@hotmail.com'],
+        subject: 'Greetings',
+        body:    'How are you? Nice greetings from Leipzig'
+    });
+    console.log("Mail sent")*/
+}
+
+
+function clearDb() {
+    db.transaction(initDb, errorCB, successCB);
+    m.n = 0;
+    alert("Database cleared")
+}
+
+
+function onError(err){
+  var message = '';
+  switch (err.code) {
+    case FileError.SECURITY_ERR:
+      message = 'Security Error';
+      break;
+    case FileError.NOT_FOUND_ERR:
+      message = 'Not Found Error';
+      break;
+    case FileError.QUOTA_EXCEEDED_ERR:
+      message = 'Quota Exceeded Error';
+      break;
+    case FileError.INVALID_MODIFICATION_ERR:
+      message = 'Invalid Modification Error';
+      break;
+    case FileError.INVALID_STATE_ERR:
+      message = 'Invalid State Error';
+      break;
+    default:
+      message = 'Unknown Error';
+      break;
+  }
+  console.log(message);
+  alert("onError: "+message);
+}
+
+
+function gotFS(fs) {
+    filesystem = fs
+    filesystem.root.getFile("projectFileName", {create: true, exclusive: false}, gotFE, onError);
+    console.log("gotFS: " + fs.name);
+}
+
+
+function gotFE(fileEntry) {
+    fileObj = fileEntry;
+    console.log('gotFE:' + fileObj.fullPath);
+}
+
+function saveFileContent() {
+    console.log("files://"+fileObj.fullPath);
+    fileObj.createWriter(gotFW, onError);
+    console.log("save2");
+}
+
+function gotFW(writer) {
+    console.log("gotFW");
+    writer.write("Some text");
+    console.log("W: "+fileObj.fullPath)
+}
+
+
+</script>
+
+</head>
+
+<body onload="onLoad();">
+
+    <div id="splashscreen" class='ui-loader heavy'>
+        App Framework - Tab View
+        <br>
+        <br>
+        <span class='ui-icon ui-icon-loading spin'></span>
+        <h1>Starting app</h1>
+    </div>
+
+    <div class="view">
+        <header>
+            <h1>Title</h1>
+        </header>
+
+        <div class="pages">
+
+            <!--Tab View Pages-->
+            <div class="panel" data-title="Jump" id="tab1" data-selected="true">
+                <button onclick="startstop()">Start/Stop</button>
+                <button onclick="start10min()">Starta om 10 min</button>
+                <table>
+                    <tr>
+                        <td>Acceleration:</td><td id="ax"></td><td id="ay"></td><td id="az"></td>
+                    </tr><tr>
+                        <td>Orientation:</td><td id="oLR"></td><td id="oFB"></td><td id="oDir"></td>
+                    </tr><tr>
+                        <td>Position:</td><td id="gLat"></td><td id="gLon"></td><td id="gAlt"></td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="panel" data-title="Debug" id="tab2" >
+                <input type="email" id="email" value="a@b.com">
+                <button onclick="emailDatabase()">Mail dB</button>
+                <button onclick="clearDb()">Clear dB</button>
+            </div>
+
+            <div class="panel" data-title="Settings" id="tab3">
+                <input type="radio" name="units" value='Meters' id="Meters" >  <label for="Meters">Meters</label>
+                <input type="radio" name="units" value='Feets' id="Feets" >  <label for="Feets">Feets</label>
+            </div>
+
+            <div class="panel" data-title="Info" id="tab4">
+                The fantastic jump app!!!
+            </div>
+
+        </div>
+
+        <footer>
+            <a href="#tab1" class="icon home" onclick="$.afui.clearHistory()">Home</a>
+            <a href="#tab2" class="icon paper" onclick="$.afui.clearHistory()">Debug</a>
+            <a href="#tab3" class="icon settings" onclick="$.afui.clearHistory()">Settings</a>
+            <a href="#tab4" class="icon info" onclick="$.afui.clearHistory()">Info</a>
+        </footer>
+    </div>
+
+
+</body>
+
+</html>
